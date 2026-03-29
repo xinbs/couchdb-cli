@@ -14,6 +14,14 @@
 - `fs` 模式
   把数据库初始化成专用文件树，目录和文件语义更强
 
+## 详细文档
+
+- [文档总览](./docs/README.md)
+- [模式说明：root / docs / fs](./docs/modes.md)
+- [交互式 shell 详细用法](./docs/shell.md)
+- [命令式 CLI 详细用法](./docs/cli.md)
+- [AI / 自动化调用说明](./docs/ai-automation.md)
+
 ## 安装
 
 全局安装：
