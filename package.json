@@ -2,6 +2,21 @@
   "name": "@xinbs/couchdb-cli",
   "version": "0.1.0",
   "description": "Cross-platform CouchDB CLI for humans and agents.",
+  "keywords": [
+    "couchdb",
+    "cli",
+    "shell",
+    "database",
+    "attachments"
+  ],
+  "homepage": "https://github.com/xinbs/couchdb-cli#readme",
+  "bugs": {
+    "url": "https://github.com/xinbs/couchdb-cli/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xinbs/couchdb-cli.git"
+  },
   "type": "module",
   "bin": {
     "cdb": "dist/index.js"
@@ -12,6 +27,9 @@
   ],
   "engines": {
     "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --target node20 --out-dir dist --clean --sourcemap --minify-whitespace",
