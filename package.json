@@ -1,0 +1,40 @@
+{
+  "name": "@xinbs/couchdb-cli",
+  "version": "0.1.0",
+  "description": "Cross-platform CouchDB CLI for humans and agents.",
+  "type": "module",
+  "bin": {
+    "cdb": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --target node20 --out-dir dist --clean --sourcemap --minify-whitespace",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:unit": "vitest run test/unit",
+    "test:integration": "vitest run test/integration",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "commander": "^14.0.1",
+    "env-paths": "^3.0.0",
+    "mime-types": "^3.0.1",
+    "string-argv": "^0.3.2",
+    "undici": "^7.16.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/mime-types": "^2.1.4",
+    "@types/node": "^24.6.0",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
