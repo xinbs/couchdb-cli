@@ -9,12 +9,13 @@ import { registerProfileCommands } from "../commands/profile.js";
 import { createAction } from "./action.js";
 import { startShell } from "./shell.js";
 
-export function buildProgram(options: { shellMode?: boolean } = {}): Command {
+export function buildProgram(options: { shellMode?: boolean; version?: string } = {}): Command {
   const program = new Command();
 
   program
     .name("cdb")
     .description("CouchDB CLI. Start with `cdb auth login`, then use `cdb db list` to verify the connection.")
+    .version(options.version ?? "0.0.0")
     .showHelpAfterError()
     .option("--profile <profile>", "Connection profile name")
     .option("--url <url>", "CouchDB base URL")
