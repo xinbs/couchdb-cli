@@ -149,6 +149,24 @@ shell 里同时有：
 npm i -g @xinbs/couchdb-cli
 ```
 
+更新到最新版本：
+
+```bash
+npm i -g @xinbs/couchdb-cli@latest
+```
+
+或者：
+
+```bash
+npm update -g @xinbs/couchdb-cli
+```
+
+确认当前版本：
+
+```bash
+cdb --version
+```
+
 临时试用：
 
 ```bash

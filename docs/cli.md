@@ -1,5 +1,31 @@
 # 命令式 CLI
 
+## 安装和更新
+
+安装：
+
+```bash
+npm i -g @xinbs/couchdb-cli
+```
+
+更新：
+
+```bash
+npm i -g @xinbs/couchdb-cli@latest
+```
+
+或者：
+
+```bash
+npm update -g @xinbs/couchdb-cli
+```
+
+查看版本：
+
+```bash
+cdb --version
+```
+
 ## 全局参数
 
 所有命令都支持这些全局参数：
