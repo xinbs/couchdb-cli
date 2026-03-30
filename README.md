@@ -25,6 +25,10 @@ cp ./local.txt note.txt
 pull releases ./downloaded
 ```
 
+实际交互效果：
+
+![交互式 shell 示例](./Screenshot_interaction.jpg)
+
 也就是说，你不是在背 CouchDB API，而是在用接近文件管理器的方式操作数据库内容。
 
 ### 2. 普通 CouchDB 文档库也能像目录树一样浏览
