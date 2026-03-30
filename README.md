@@ -22,6 +22,7 @@ cd ccode
 ls
 vi ccode_config.json
 cp ./local.txt note.txt
+cp releases
 pull releases ./downloaded
 ```
 
@@ -84,6 +85,17 @@ shell 里同时有：
   `lpwd`、`lcd`、`lls`、`lcp`
 
 这让你在“本地文件”和“远程 CouchDB 内容”之间切换时，不用跳出上下文。
+
+这里的 `cp` 会自动判断方向：
+
+- `cp ./a.txt`
+  本地到远程
+- `cp note.txt`
+  远程到本地
+- `cp ./dir`
+  本地目录到远程
+- `cp releases`
+  远程目录到本地
 
 ### 5. 适合人，也适合 AI
 

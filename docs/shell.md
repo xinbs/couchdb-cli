@@ -79,7 +79,7 @@ cat <path>
 vi <path>
 vim <path>
 put <local> [remote]
-cp <local> [remote]
+cp <source> [target]
 get <remote> [local]
 push <localDir> [remote]
 pull [remote] <localDir>
@@ -137,6 +137,48 @@ get a.txt ./local-a.txt
 
 - 从当前远程目录下载 `a.txt`
 - 保存到本地 `./local-a.txt`
+
+## `cp` 的规则
+
+`cp` 现在会自动判断方向，并且同时支持文件和目录。
+
+### 本地到远程
+
+```text
+cp ./a.txt
+cp ./a.txt note.txt
+cp ./dir
+cp ./dir backup
+```
+
+规则：
+
+- 第一个参数如果是 `./`、`../`、`~/` 这类显式本地路径，就按本地源处理
+- 目标省略时，默认复制到当前远程目录
+- 如果源是目录，会自动按目录复制，不需要再写 `push`
+
+### 远程到本地
+
+```text
+cp note.txt
+cp note.txt ./local-note.txt
+cp releases
+```
+
+规则：
+
+- 如果第一个参数是远程路径，就按远程源处理
+- 目标省略时，默认复制到当前本地目录
+- 如果源是目录，会自动按目录复制，不需要再写 `pull`
+
+### 如何避免歧义
+
+建议：
+
+- 本地源写成 `./file`、`../file`、`~/file`
+- 远程绝对路径写成 `/remote/path`
+
+这样 `cp` 的方向最明确。
 
 ## docs 模式下的典型流程
 

@@ -209,7 +209,7 @@ async function runShellCommand(
       await shellPut(state, args[0], args[1]);
       return;
     case "cp":
-      await shellPut(state, args[0], args[1]);
+      await shellCp(state, args[0], args[1]);
       return;
     case "get":
       await shellGet(state, args[0], args[1]);
@@ -579,6 +579,40 @@ async function shellPut(state: ShellState, localFile?: string, remotePathInput?:
   const remotePath = resolveRemotePath(state.cwd, remotePathInput ?? path.basename(localPath));
   const doc = await createFsService(state).putLocalFile(localPath, remotePath);
   stdout.write(`Uploaded ${localPath} to ${doc.path}\n`);
+}
+
+async function shellCp(state: ShellState, sourceInput?: string, targetInput?: string): Promise<void> {
+  if (!sourceInput) {
+    stdout.write("Usage: cp <source> [target]\n");
+    return;
+  }
+
+  await ensureDb(state);
+  const source = await classifyCopySource(state, sourceInput);
+
+  if (source === "local-file") {
+    const localPath = resolveLocalPath(state.localCwd, sourceInput);
+    const remotePath = await resolveRemoteTargetPathForLocalSource(state, localPath, targetInput, false);
+    await shellPut(state, localPath, remotePath);
+    return;
+  }
+
+  if (source === "local-dir") {
+    const localPath = resolveLocalPath(state.localCwd, sourceInput);
+    const remotePath = await resolveRemoteTargetPathForLocalSource(state, localPath, targetInput, true);
+    await shellPush(state, localPath, remotePath);
+    return;
+  }
+
+  const remoteNode = await resolveRemoteNodeForCopy(state, sourceInput);
+  if (remoteNode.type === "dir") {
+    const localDir = await resolveLocalTargetPathForRemoteSource(state, remoteNode.path, targetInput, true);
+    await shellPull(state, remoteNode.path, localDir);
+    return;
+  }
+
+  const localFile = await resolveLocalTargetPathForRemoteSource(state, remoteNode.path, targetInput, false);
+  await shellGet(state, remoteNode.path, localFile);
 }
 
 async function shellGet(state: ShellState, remotePathInput?: string, localFile?: string): Promise<void> {
@@ -959,6 +993,11 @@ async function completeShellInput(state: ShellState, line: string): Promise<[str
     return [matches, fragment];
   }
 
+  if (command === "cp") {
+    const result = await completeCpInput(state, tokens, fragment, endsWithSpace, argIndex);
+    return [result.matches, result.fragment];
+  }
+
   if (shouldCompleteRemotePath(state, command, argIndex)) {
     const directoriesOnly = command === "cd";
     const remoteFragment =
@@ -983,6 +1022,60 @@ async function completeShellInput(state: ShellState, line: string): Promise<[str
   }
 
   return [[], fragment];
+}
+
+async function completeCpInput(
+  state: ShellState,
+  tokens: string[],
+  fragment: string,
+  endsWithSpace: boolean,
+  argIndex: number
+): Promise<{ matches: string[]; fragment: string }> {
+  const sourceFragment = argIndex <= 0 ? fragment : endsWithSpace ? "" : (tokens[1] ?? "");
+
+  if (argIndex <= 0) {
+    if (looksLikeExplicitLocalPath(fragment)) {
+      return {
+        matches: await completeLocalPath(state.localCwd, fragment, false),
+        fragment
+      };
+    }
+
+    if (looksLikeExplicitRemotePath(fragment)) {
+      return {
+        matches: await completeRemotePath(state, fragment, false),
+        fragment
+      };
+    }
+
+    const localMatches = await completeLocalPath(state.localCwd, fragment, false);
+    const remoteMatches = state.db ? await completeRemotePath(state, fragment, false) : [];
+    return {
+      matches: [...new Set([...localMatches, ...remoteMatches])].sort((a, b) => a.localeCompare(b)),
+      fragment
+    };
+  }
+
+  if (looksLikeExplicitLocalPath(sourceFragment)) {
+    return {
+      matches: await completeRemotePath(state, fragment, false),
+      fragment
+    };
+  }
+
+  if (looksLikeExplicitRemotePath(sourceFragment)) {
+    return {
+      matches: await completeLocalPath(state.localCwd, fragment, false),
+      fragment
+    };
+  }
+
+  const localMatches = await completeLocalPath(state.localCwd, fragment, false);
+  const remoteMatches = state.db ? await completeRemotePath(state, fragment, false) : [];
+  return {
+    matches: [...new Set([...localMatches, ...remoteMatches])].sort((a, b) => a.localeCompare(b)),
+    fragment
+  };
 }
 
 function parseCompletionInput(line: string): { tokens: string[]; fragment: string } {
@@ -1010,6 +1103,10 @@ function shouldCompleteLocalPath(command: string, argIndex: number): boolean {
   }
 
   if ((command === "put" || command === "cp" || command === "push") && argIndex === 0) {
+    return true;
+  }
+
+  if (command === "cp" && argIndex === 1) {
     return true;
   }
 
@@ -1171,6 +1268,14 @@ function getRemoteDisplayParent(fragment: string, parentFragment: string): strin
   }
 
   return parentFragment.endsWith("/") ? parentFragment : `${parentFragment}/`;
+}
+
+function looksLikeExplicitLocalPath(input: string): boolean {
+  return input === "~" || input.startsWith("./") || input.startsWith("../") || input.startsWith("~/");
+}
+
+function looksLikeExplicitRemotePath(input: string): boolean {
+  return input.startsWith("/");
 }
 
 async function listFsCompletionEntries(
@@ -1828,6 +1933,136 @@ async function resolveDocsNodeOrUndefined(
   }
 }
 
+async function classifyCopySource(
+  state: ShellState,
+  sourceInput: string
+): Promise<"local-file" | "local-dir" | "remote"> {
+  const localKind = await getLocalPathKind(state.localCwd, sourceInput);
+  const remoteKind = await getRemotePathKind(state, sourceInput);
+
+  if (looksLikeExplicitLocalPath(sourceInput)) {
+    if (localKind) {
+      return localKind === "dir" ? "local-dir" : "local-file";
+    }
+    throw new Error(`Local path ${resolveLocalPath(state.localCwd, sourceInput)} does not exist.`);
+  }
+
+  if (looksLikeExplicitRemotePath(sourceInput)) {
+    if (remoteKind) {
+      return "remote";
+    }
+    throw new Error(`Remote path ${resolveRemotePath(state.cwd, sourceInput)} does not exist.`);
+  }
+
+  if (localKind && !remoteKind) {
+    return localKind === "dir" ? "local-dir" : "local-file";
+  }
+
+  if (remoteKind && !localKind) {
+    return "remote";
+  }
+
+  if (localKind && remoteKind) {
+    return localKind === "dir" ? "local-dir" : "local-file";
+  }
+
+  throw new Error(
+    `Cannot resolve copy source ${sourceInput}. Use ./ or ~/ for local paths, or /... for explicit remote paths.`
+  );
+}
+
+async function getLocalPathKind(base: string, input: string): Promise<"file" | "dir" | undefined> {
+  try {
+    const details = await stat(resolveLocalPath(base, input));
+    if (details.isDirectory()) {
+      return "dir";
+    }
+    if (details.isFile()) {
+      return "file";
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function getRemotePathKind(state: ShellState, input: string): Promise<"file" | "dir" | undefined> {
+  const remotePath = resolveRemotePath(state.cwd, input);
+  if ((await getDbMode(state)) === "docs") {
+    const node = await resolveDocsNodeOrUndefined(state, remotePath);
+    if (!node) {
+      return undefined;
+    }
+    return node.type === "dir" ? "dir" : "file";
+  }
+
+  try {
+    const details = await createFsService(state).stat(remotePath);
+    return details.type === "dir" ? "dir" : "file";
+  } catch {
+    return undefined;
+  }
+}
+
+async function resolveRemoteNodeForCopy(
+  state: ShellState,
+  input: string
+): Promise<
+  | { type: "dir"; path: string }
+  | { type: "file"; path: string }
+> {
+  const remotePath = resolveRemotePath(state.cwd, input);
+  const kind = await getRemotePathKind(state, input);
+  if (!kind) {
+    throw new Error(`Remote path ${remotePath} does not exist.`);
+  }
+  return {
+    type: kind,
+    path: remotePath
+  };
+}
+
+async function resolveRemoteTargetPathForLocalSource(
+  state: ShellState,
+  localPath: string,
+  targetInput: string | undefined,
+  sourceIsDir: boolean
+): Promise<string> {
+  const baseName = path.basename(localPath);
+  if (!targetInput) {
+    return sourceIsDir ? resolveRemotePath(state.cwd, baseName) : resolveRemotePath(state.cwd, baseName);
+  }
+
+  const candidate = resolveRemotePath(state.cwd, targetInput);
+  const existingKind = await getRemotePathKind(state, targetInput);
+  if (existingKind === "dir") {
+    return resolveRemotePath(candidate, baseName);
+  }
+  return candidate;
+}
+
+async function resolveLocalTargetPathForRemoteSource(
+  state: ShellState,
+  remotePath: string,
+  targetInput: string | undefined,
+  sourceIsDir: boolean
+): Promise<string> {
+  const baseName = path.posix.basename(remotePath);
+  if (!targetInput) {
+    return path.resolve(state.localCwd, baseName);
+  }
+
+  const candidate = resolveLocalPath(state.localCwd, targetInput);
+  const existingKind = await getLocalPathKind(state.localCwd, targetInput);
+  if (existingKind === "dir") {
+    return path.join(candidate, baseName);
+  }
+  if (sourceIsDir && targetInput === ".") {
+    return path.resolve(state.localCwd, baseName);
+  }
+  return candidate;
+}
+
 function tryParseJsonObject(buffer: Buffer): Record<string, unknown> | undefined {
   try {
     return ensureObject(JSON.parse(buffer.toString("utf8")), "Document payload must be a JSON object.");
@@ -2163,7 +2398,7 @@ function printShellHelp(): void {
   vi <path>                Alias of vim
   vim <path>               Edit remote file or JSON doc via $EDITOR
   put <local> [remote]     Upload local file
-  cp <local> [remote]      Alias of put; copy a local file into the current remote directory
+  cp <source> [target]     Auto-detect local<->remote copy; supports files and directories
   get <remote> [local]     Download remote file or doc tree
   push <localDir> [remote] Upload local directory
   pull [remote] <localDir> Download remote directory
@@ -2182,7 +2417,9 @@ Notes:
   - At server root, \`rm <db>\` deletes a database after confirmation.
   - In docs mode, empty directories are stored as hidden marker docs.
   - In docs mode, \`put/push/rz\` write JSON docs when the source is JSON-like, otherwise they write attachment-backed files.
-  - Local paths in \`put/get/push/pull\` are resolved from the local cwd shown by \`lpwd\`.
+  - Local paths in \`put/get/push/pull/cp\` are resolved from the local cwd shown by \`lpwd\`.
+  - \`cp ./file.txt\` uploads into the current remote directory. \`cp remote.txt\` downloads into the current local directory.
+  - \`cp ./dir\` uploads the whole directory into the current remote directory. \`cp remote-dir\` downloads it into the current local directory.
   - Use \`l<cmd>\` to run local commands in that local cwd. For example: \`lls\`, \`lcp\`, \`lmkdir\`, \`lrz\`.
   - \`rz\` receives into a temp dir, then uploads into the current docs/fs path.
   - \`sz\` is the reverse path: stage remote docs/files in a temp dir, then send them with local \`sz\`. Directories add \`-r\` automatically.
